@@ -12,19 +12,17 @@ from aiogram.types import (
     InlineKeyboardButton,
     CallbackQuery
 )
-from aiogram.filters import Text, Command
+from aiogram.filters import Command, Text
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
-from aiogram.fsm.storage.memory import MemoryStorage
 
 # ================= НАСТРОЙКИ =================
-BOT_TOKEN = os.environ.get("BOT_TOKEN")  # Берем токен из переменных окружения
-ADMIN_ID = int(os.environ.get("ADMIN_ID", 0))
+BOT_TOKEN = os.getenv("BOT_TOKEN", "ВАШ_ТОКЕН_ЗДЕСЬ")
+ADMIN_ID = int(os.getenv("ADMIN_ID", "ВАШ_ID_ЗДЕСЬ"))
 ORDERS_FILE = "orders.json"
 
 bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
-storage = MemoryStorage()
-dp = Dispatcher(storage=storage)
+dp = Dispatcher()
 
 # ================= FSM =================
 class OrderFSM(StatesGroup):
@@ -102,21 +100,18 @@ def admin_reply_kb(user_id: int):
 
 def admin_reply_question_kb(user_id: int, q_key: str):
     return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="✅ Ответить", callback_data=f"answer_{user_id}_{q_key}")
-        ]
+        [InlineKeyboardButton(text="✅ Ответить", callback_data=f"answer_{user_id}_{q_key}")]
     ])
 
-# ================= Хэндлеры =================
+# ================= HANDLERS =================
 @dp.message(Command(commands=["start"]))
 async def start(message: Message):
     await message.answer(
-        "👋 <b>Добро пожаловать</b>\n\n"
-        "Я помогу подобрать лучшее решение под вашу задачу.",
+        "👋 <b>Добро пожаловать</b>\n\nЯ помогу подобрать лучшее решение под вашу задачу.",
         reply_markup=main_menu
     )
 
-@dp.message(Text("🤖 Услуги"))
+@dp.message(Text(equals="🤖 Услуги"))
 async def show_services(message: Message):
     await message.answer("Выберите услугу 👇", reply_markup=services_kb)
 
@@ -127,8 +122,7 @@ async def service_clicked(callback: CallbackQuery, state: FSMContext):
     await state.set_state(OrderFSM.describe_task)
     await state.update_data(service=service)
     await callback.message.answer(
-        "Мы уже знаем, что вам предложить 👍\n\n"
-        "Опишите задачу одним сообщением."
+        "Мы уже знаем, что вам предложить 👍\nОпишите задачу одним сообщением."
     )
 
 @dp.message(OrderFSM.describe_task)
@@ -144,16 +138,14 @@ async def get_task(message: Message, state: FSMContext):
     save_order(order)
     await bot.send_message(
         ADMIN_ID,
-        f"📩 <b>Новая заявка</b>\n\n"
-        f"👤 @{order['username']} ({order['user_id']})\n"
-        f"🛠 Услуга: {order['service']}\n\n"
-        f"📌 {order['message']}",
+        f"📩 <b>Новая заявка</b>\n\n👤 @{order['username']} ({order['user_id']})\n"
+        f"🛠 Услуга: {order['service']}\n\n📌 {order['message']}",
         reply_markup=admin_reply_kb(order["user_id"])
     )
     await message.answer("✅ Заявка отправлена специалисту", reply_markup=main_menu)
     await state.clear()
 
-@dp.message(Text("❓ Задать вопрос"))
+@dp.message(Text(equals="❓ Задать вопрос"))
 async def ask_question(message: Message):
     await message.answer("Выберите вопрос 👇", reply_markup=questions_kb)
 
@@ -163,8 +155,7 @@ async def question_sent(callback: CallbackQuery):
     q_text = QUESTIONS_MAP.get(callback.data, callback.data)
     await bot.send_message(
         ADMIN_ID,
-        f"❓ Вопрос от @{callback.from_user.username} ({callback.from_user.id})\n"
-        f"Тема: {q_text}",
+        f"❓ Вопрос от @{callback.from_user.username} ({callback.from_user.id})\nТема: {q_text}",
         reply_markup=admin_reply_question_kb(callback.from_user.id, callback.data)
     )
     await callback.message.answer("Вопрос отправлен 👌", reply_markup=main_menu)
@@ -173,8 +164,7 @@ async def question_sent(callback: CallbackQuery):
 async def admin_template(callback: CallbackQuery):
     await callback.answer()
     _, _, user_id = callback.data.split("_")
-    text = "Спасибо за обращение! Мы скоро свяжемся с вами."
-    await bot.send_message(int(user_id), text)
+    await bot.send_message(int(user_id), "Спасибо за обращение! Мы скоро свяжемся с вами.")
     await callback.message.answer("Ответ отправлен ✅")
 
 @dp.callback_query(Text(startswith="manual_"))
@@ -205,11 +195,8 @@ async def admin_reply_question(callback: CallbackQuery, state: FSMContext):
 
 # ================= RUN =================
 async def main():
-    print("Бот запущен 🚀")
-    try:
-        await dp.start_polling(bot)
-    except Exception as e:
-        print(f"Ошибка: {e}")
+    print("Бот запущен!")
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
