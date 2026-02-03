@@ -40,9 +40,9 @@ main_menu = ReplyKeyboardMarkup(
 )
 
 services_kb = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text="💼 Бот для бизнеса", callback_data="service_business")],
-    [InlineKeyboardButton(text="🛒 Бот для продаж", callback_data="service_sales")],
-    [InlineKeyboardButton(text="📦 Бот для заявок", callback_data="service_leads")],
+    [InlineKeyboardButton(text="💼 Бизнес", callback_data="service_business")],
+    [InlineKeyboardButton(text="🛒 Магазин", callback_data="service_sales")],
+    [InlineKeyboardButton(text="📦 Сбор заявок", callback_data="service_leads")],
     [InlineKeyboardButton(text="🧠 AI-бот", callback_data="service_ai")],
     [InlineKeyboardButton(text="🛠 Поддержка и доработка", callback_data="service_support")]
 ])
