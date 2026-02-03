@@ -1,10 +1,9 @@
-#BOT_TOKEN = "8306949276:AAFE3sdOF9gDBkuRNpgbpKNFhUz4BtUX4tM" ADMIN_ID = 1069396612
 import asyncio
 import json
 import os
 from datetime import datetime
 
-from aiogram import Bot, Dispatcher, F
+from aiogram import Bot, Dispatcher
 from aiogram.types import (
     Message,
     ReplyKeyboardMarkup,
@@ -13,16 +12,19 @@ from aiogram.types import (
     InlineKeyboardButton,
     CallbackQuery
 )
-from aiogram.fsm.state import StatesGroup, State
+from aiogram.filters import Text, Command
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import StatesGroup, State
+from aiogram.fsm.storage.memory import MemoryStorage
 
 # ================= НАСТРОЙКИ =================
-BOT_TOKEN = "8306949276:AAFE3sdOF9gDBkuRNpgbpKNFhUz4BtUX4tM"  # замените на токен
-ADMIN_ID = 1069396612           # замените на ваш ID
+BOT_TOKEN = os.environ.get("BOT_TOKEN")  # Берем токен из переменных окружения
+ADMIN_ID = int(os.environ.get("ADMIN_ID", 0))
 ORDERS_FILE = "orders.json"
 
-bot = Bot(BOT_TOKEN, parse_mode="HTML")
-dp = Dispatcher()
+bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
+storage = MemoryStorage()
+dp = Dispatcher(storage=storage)
 
 # ================= FSM =================
 class OrderFSM(StatesGroup):
@@ -47,7 +49,6 @@ services_kb = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="🛠 Поддержка и доработка", callback_data="service_support")]
 ])
 
-# Тема: отображение текста вместо ключа
 QUESTIONS_MAP = {
     "q_price": "интересует стоимость",
     "q_deadline": "интересует сроки реализации",
@@ -76,7 +77,6 @@ questions_kb = InlineKeyboardMarkup(inline_keyboard=[
 
 # ================= HELPERS =================
 def save_order(order: dict):
-    """Сохраняем заказ безопасно, даже если файл пустой или не существует."""
     if not os.path.exists(ORDERS_FILE):
         with open(ORDERS_FILE, "w", encoding="utf-8") as f:
             f.write("[]")
@@ -90,7 +90,6 @@ def save_order(order: dict):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 def admin_reply_kb(user_id: int):
-    """Клавиатура для ответа админа на заявку"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="✅ Спасибо", callback_data=f"tpl_ok_{user_id}"),
@@ -102,15 +101,14 @@ def admin_reply_kb(user_id: int):
     ])
 
 def admin_reply_question_kb(user_id: int, q_key: str):
-    """Клавиатура для ответа админа на вопрос"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="✅ Ответить", callback_data=f"answer_{user_id}_{q_key}")
         ]
     ])
 
-# ================= START =================
-@dp.message(F.text == "/start")
+# ================= Хэндлеры =================
+@dp.message(Command(commands=["start"]))
 async def start(message: Message):
     await message.answer(
         "👋 <b>Добро пожаловать</b>\n\n"
@@ -118,12 +116,11 @@ async def start(message: Message):
         reply_markup=main_menu
     )
 
-# ================= УСЛУГИ =================
-@dp.message(F.text == "🤖 Услуги")
+@dp.message(Text("🤖 Услуги"))
 async def show_services(message: Message):
     await message.answer("Выберите услугу 👇", reply_markup=services_kb)
 
-@dp.callback_query(F.data.startswith("service_"))
+@dp.callback_query(Text(startswith="service_"))
 async def service_clicked(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     service = callback.data.replace("service_", "")
@@ -145,7 +142,6 @@ async def get_task(message: Message, state: FSMContext):
         "message": message.text
     }
     save_order(order)
-
     await bot.send_message(
         ADMIN_ID,
         f"📩 <b>Новая заявка</b>\n\n"
@@ -154,16 +150,14 @@ async def get_task(message: Message, state: FSMContext):
         f"📌 {order['message']}",
         reply_markup=admin_reply_kb(order["user_id"])
     )
-
     await message.answer("✅ Заявка отправлена специалисту", reply_markup=main_menu)
     await state.clear()
 
-# ================= ВОПРОСЫ =================
-@dp.message(F.text == "❓ Задать вопрос")
+@dp.message(Text("❓ Задать вопрос"))
 async def ask_question(message: Message):
     await message.answer("Выберите вопрос 👇", reply_markup=questions_kb)
 
-@dp.callback_query(F.data.startswith("q_"))
+@dp.callback_query(Text(startswith="q_"))
 async def question_sent(callback: CallbackQuery):
     await callback.answer()
     q_text = QUESTIONS_MAP.get(callback.data, callback.data)
@@ -175,8 +169,7 @@ async def question_sent(callback: CallbackQuery):
     )
     await callback.message.answer("Вопрос отправлен 👌", reply_markup=main_menu)
 
-# ================= ОТВЕТ АДМИНА НА ЗАЯВКУ =================
-@dp.callback_query(F.data.startswith("tpl_"))
+@dp.callback_query(Text(startswith="tpl_"))
 async def admin_template(callback: CallbackQuery):
     await callback.answer()
     _, _, user_id = callback.data.split("_")
@@ -184,7 +177,7 @@ async def admin_template(callback: CallbackQuery):
     await bot.send_message(int(user_id), text)
     await callback.message.answer("Ответ отправлен ✅")
 
-@dp.callback_query(F.data.startswith("manual_"))
+@dp.callback_query(Text(startswith="manual_"))
 async def admin_manual(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     user_id = int(callback.data.split("_")[1])
@@ -199,8 +192,7 @@ async def send_manual(message: Message, state: FSMContext):
     await message.answer("Ответ отправлен ✅")
     await state.clear()
 
-# ================= ОТВЕТ НА ВОПРОС =================
-@dp.callback_query(F.data.startswith("answer_"))
+@dp.callback_query(Text(startswith="answer_"))
 async def admin_reply_question(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     parts = callback.data.split("_", 2)
@@ -213,8 +205,11 @@ async def admin_reply_question(callback: CallbackQuery, state: FSMContext):
 
 # ================= RUN =================
 async def main():
-    print("Бот запущен с premium UX и интерактивными кнопками!")
-    await dp.start_polling(bot)
+    print("Бот запущен 🚀")
+    try:
+        await dp.start_polling(bot)
+    except Exception as e:
+        print(f"Ошибка: {e}")
 
 if __name__ == "__main__":
     asyncio.run(main())
