@@ -12,7 +12,7 @@ from aiogram.types import (
     InlineKeyboardButton,
     CallbackQuery
 )
-from aiogram.filters import Command, Text
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 
@@ -111,11 +111,16 @@ async def start(message: Message):
         reply_markup=main_menu
     )
 
-@dp.message(Text(equals="🤖 Услуги"))
+# Обработчики по тексту через lambda
+@dp.message(lambda m: m.text == "🤖 Услуги")
 async def show_services(message: Message):
     await message.answer("Выберите услугу 👇", reply_markup=services_kb)
 
-@dp.callback_query(Text(startswith="service_"))
+@dp.message(lambda m: m.text == "❓ Задать вопрос")
+async def ask_question(message: Message):
+    await message.answer("Выберите вопрос 👇", reply_markup=questions_kb)
+
+@dp.callback_query(lambda c: c.data.startswith("service_"))
 async def service_clicked(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     service = callback.data.replace("service_", "")
@@ -145,11 +150,7 @@ async def get_task(message: Message, state: FSMContext):
     await message.answer("✅ Заявка отправлена специалисту", reply_markup=main_menu)
     await state.clear()
 
-@dp.message(Text(equals="❓ Задать вопрос"))
-async def ask_question(message: Message):
-    await message.answer("Выберите вопрос 👇", reply_markup=questions_kb)
-
-@dp.callback_query(Text(startswith="q_"))
+@dp.callback_query(lambda c: c.data.startswith("q_"))
 async def question_sent(callback: CallbackQuery):
     await callback.answer()
     q_text = QUESTIONS_MAP.get(callback.data, callback.data)
@@ -160,14 +161,14 @@ async def question_sent(callback: CallbackQuery):
     )
     await callback.message.answer("Вопрос отправлен 👌", reply_markup=main_menu)
 
-@dp.callback_query(Text(startswith="tpl_"))
+@dp.callback_query(lambda c: c.data.startswith("tpl_"))
 async def admin_template(callback: CallbackQuery):
     await callback.answer()
     _, _, user_id = callback.data.split("_")
     await bot.send_message(int(user_id), "Спасибо за обращение! Мы скоро свяжемся с вами.")
     await callback.message.answer("Ответ отправлен ✅")
 
-@dp.callback_query(Text(startswith="manual_"))
+@dp.callback_query(lambda c: c.data.startswith("manual_"))
 async def admin_manual(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     user_id = int(callback.data.split("_")[1])
@@ -182,7 +183,7 @@ async def send_manual(message: Message, state: FSMContext):
     await message.answer("Ответ отправлен ✅")
     await state.clear()
 
-@dp.callback_query(Text(startswith="answer_"))
+@dp.callback_query(lambda c: c.data.startswith("answer_"))
 async def admin_reply_question(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     parts = callback.data.split("_", 2)
