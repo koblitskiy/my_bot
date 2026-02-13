@@ -25,53 +25,18 @@ bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
 dp = Dispatcher()
 
 # ================= FSM =================
-class OrderFSM(StatesGroup):
-    describe_task = State()
+class LeadFSM(StatesGroup):
+    choose_role = State()
+    choose_goal = State()
+    business_type = State()
+    volume = State()
+    integrations = State()
+    budget = State()
+    deadline = State()
+    final_comment = State()
 
 class AdminReplyFSM(StatesGroup):
     reply_text = State()
-
-# ================= КЛАВИАТУРЫ =================
-main_menu = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="🤖 Услуги"), KeyboardButton(text="❓ Задать вопрос")]
-    ],
-    resize_keyboard=True
-)
-
-services_kb = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text="💼 Бизнес", callback_data="service_business")],
-    [InlineKeyboardButton(text="🛒 Магазин", callback_data="service_sales")],
-    [InlineKeyboardButton(text="📦 Сбор заявок", callback_data="service_leads")],
-    [InlineKeyboardButton(text="🧠 AI-бот", callback_data="service_ai")],
-    [InlineKeyboardButton(text="🛠 Поддержка и доработка", callback_data="service_support")]
-])
-
-QUESTIONS_MAP = {
-    "q_price": "интересует стоимость",
-    "q_deadline": "интересует сроки реализации",
-    "q_features": "интересуют возможности бота",
-    "q_support": "интересует поддержка после запуска",
-    "q_crm": "интересует интеграция с CRM",
-    "q_ai": "интересует AI-функционал",
-    "q_notify": "интересует настройка уведомлений",
-    "q_security": "интересует безопасность данных",
-    "q_mobile": "интересует мобильная версия",
-    "q_custom": "интересует индивидуальная разработка"
-}
-
-questions_kb = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text="💰 Стоимость проекта", callback_data="q_price")],
-    [InlineKeyboardButton(text="⏰ Сроки реализации", callback_data="q_deadline")],
-    [InlineKeyboardButton(text="🛠 Возможности бота", callback_data="q_features")],
-    [InlineKeyboardButton(text="🛡 Поддержка после запуска", callback_data="q_support")],
-    [InlineKeyboardButton(text="🔗 Интеграции с CRM", callback_data="q_crm")],
-    [InlineKeyboardButton(text="🤖 AI-функционал", callback_data="q_ai")],
-    [InlineKeyboardButton(text="🔔 Уведомления", callback_data="q_notify")],
-    [InlineKeyboardButton(text="🔒 Безопасность", callback_data="q_security")],
-    [InlineKeyboardButton(text="📱 Мобильность", callback_data="q_mobile")],
-    [InlineKeyboardButton(text="⚙️ Индивидуально", callback_data="q_custom")]
-])
 
 # ================= HELPERS =================
 def save_order(order: dict):
@@ -98,69 +63,169 @@ def admin_reply_kb(user_id: int):
         ]
     ])
 
-def admin_reply_question_kb(user_id: int, q_key: str):
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Ответить", callback_data=f"answer_{user_id}_{q_key}")]
+# ================= START =================
+@dp.message(Command(commands=["start"]))
+async def start(message: Message, state: FSMContext):
+    await state.set_state(LeadFSM.choose_role)
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🏢 У меня бизнес", callback_data="role_business")],
+        [InlineKeyboardButton(text="📣 Я агентство", callback_data="role_agency")],
+        [InlineKeyboardButton(text="💡 Есть идея", callback_data="role_idea")]
+    ])
+    await message.answer(
+        "Здравствуйте.\n\n"
+        "Помогаю бизнесу и агентствам внедрять Telegram-ботов для увеличения заявок и автоматизации процессов.\n\n"
+        "Выберите формат работы:",
+        reply_markup=kb
+    )
+
+# ================= FSM HANDLERS =================
+
+# 1️⃣ Выбор роли
+@dp.callback_query(lambda c: c.data.startswith("role_"))
+async def choose_role(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    role = callback.data.replace("role_", "")
+    await state.update_data(role=role)
+    await state.set_state(LeadFSM.choose_goal)
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📈 Увеличить заявки", callback_data="goal_leads")],
+        [InlineKeyboardButton(text="🤖 Автоматизация", callback_data="goal_auto")],
+        [InlineKeyboardButton(text="💬 Поддержка", callback_data="goal_support")],
+        [InlineKeyboardButton(text="💰 Приём оплат", callback_data="goal_pay")]
     ])
 
-# ================= HANDLERS =================
-@dp.message(Command(commands=["start"]))
-async def start(message: Message):
-    await message.answer(
-        "👋 <b>Добро пожаловать</b>\n\nЯ помогу подобрать лучшее решение под вашу задачу.",
-        reply_markup=main_menu
-    )
-
-# Обработчики по тексту через lambda
-@dp.message(lambda m: m.text == "🤖 Услуги")
-async def show_services(message: Message):
-    await message.answer("Выберите услугу 👇", reply_markup=services_kb)
-
-@dp.message(lambda m: m.text == "❓ Задать вопрос")
-async def ask_question(message: Message):
-    await message.answer("Выберите вопрос 👇", reply_markup=questions_kb)
-
-@dp.callback_query(lambda c: c.data.startswith("service_"))
-async def service_clicked(callback: CallbackQuery, state: FSMContext):
-    await callback.answer()
-    service = callback.data.replace("service_", "")
-    await state.set_state(OrderFSM.describe_task)
-    await state.update_data(service=service)
     await callback.message.answer(
-        "Мы уже знаем, что вам предложить 👍\nОпишите задачу одним сообщением."
+        "Какая основная цель проекта?",
+        reply_markup=kb
     )
 
-@dp.message(OrderFSM.describe_task)
-async def get_task(message: Message, state: FSMContext):
-    data = await state.get_data()
-    order = {
-        "date": datetime.now().isoformat(),
-        "user_id": message.from_user.id,
-        "username": message.from_user.username,
-        "service": data["service"],
-        "message": message.text
-    }
-    save_order(order)
-    await bot.send_message(
-        ADMIN_ID,
-        f"📩 <b>Новая заявка</b>\n\n👤 @{order['username']} ({order['user_id']})\n"
-        f"🛠 Услуга: {order['service']}\n\n📌 {order['message']}",
-        reply_markup=admin_reply_kb(order["user_id"])
+# 2️⃣ Выбор цели
+@dp.callback_query(lambda c: c.data.startswith("goal_"))
+async def choose_goal(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    goal = callback.data.replace("goal_", "")
+    await state.update_data(goal=goal)
+    await state.set_state(LeadFSM.business_type)
+
+    await callback.message.answer(
+        "Чем занимается компания?\n(коротко укажите нишу)"
     )
-    await message.answer("✅ Заявка отправлена специалисту", reply_markup=main_menu)
+
+# 3️⃣ Ниша
+@dp.message(LeadFSM.business_type)
+async def get_business_type(message: Message, state: FSMContext):
+    await state.update_data(business_type=message.text)
+    await state.set_state(LeadFSM.volume)
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="До 50", callback_data="vol_50")],
+        [InlineKeyboardButton(text="50–200", callback_data="vol_200")],
+        [InlineKeyboardButton(text="200–1000", callback_data="vol_1000")],
+        [InlineKeyboardButton(text="1000+", callback_data="vol_1000p")]
+    ])
+    await message.answer(
+        "Сколько заявок / клиентов в месяц?",
+        reply_markup=kb
+    )
+
+# 4️⃣ Объем
+@dp.callback_query(lambda c: c.data.startswith("vol_"))
+async def choose_volume(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    volume = callback.data.replace("vol_", "")
+    await state.update_data(volume=volume)
+    await state.set_state(LeadFSM.integrations)
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="CRM", callback_data="int_crm")],
+        [InlineKeyboardButton(text="Платежи", callback_data="int_pay")],
+        [InlineKeyboardButton(text="Google Sheets", callback_data="int_sheets")],
+        [InlineKeyboardButton(text="Пока не знаю", callback_data="int_none")]
+    ])
+    await callback.message.answer(
+        "Нужны ли интеграции?",
+        reply_markup=kb
+    )
+
+# 5️⃣ Интеграции
+@dp.callback_query(lambda c: c.data.startswith("int_"))
+async def choose_integrations(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    integrations = callback.data.replace("int_", "")
+    await state.update_data(integrations=integrations)
+    await state.set_state(LeadFSM.budget)
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="До 30 000 ₽", callback_data="bud_30")],
+        [InlineKeyboardButton(text="30–80 000 ₽", callback_data="bud_80")],
+        [InlineKeyboardButton(text="80 000 ₽ +", callback_data="bud_80p")],
+        [InlineKeyboardButton(text="Нужна оценка", callback_data="bud_est")]
+    ])
+    await callback.message.answer(
+        "Ориентировочный бюджет проекта:",
+        reply_markup=kb
+    )
+
+# 6️⃣ Бюджет
+@dp.callback_query(lambda c: c.data.startswith("bud_"))
+async def choose_budget(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    budget = callback.data.replace("bud_", "")
+    await state.update_data(budget=budget)
+    await state.set_state(LeadFSM.deadline)
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Срочно", callback_data="dead_now")],
+        [InlineKeyboardButton(text="1–2 недели", callback_data="dead_2w")],
+        [InlineKeyboardButton(text="В течение месяца", callback_data="dead_month")],
+        [InlineKeyboardButton(text="Пока изучаю", callback_data="dead_later")]
+    ])
+    await callback.message.answer(
+        "Когда планируете запуск?",
+        reply_markup=kb
+    )
+
+# 7️⃣ Сроки
+@dp.callback_query(lambda c: c.data.startswith("dead_"))
+async def choose_deadline(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    deadline = callback.data.replace("dead_", "")
+    await state.update_data(deadline=deadline)
+    await state.set_state(LeadFSM.final_comment)
+
+    await callback.message.answer(
+        "Если есть дополнительные требования или примеры — напишите одним сообщением."
+    )
+
+# 8️⃣ Финальный комментарий и отправка админу
+@dp.message(LeadFSM.final_comment)
+async def finish_lead(message: Message, state: FSMContext):
+    await state.update_data(comment=message.text)
+    data = await state.get_data()
+
+    lead_text = (
+        "🔥 <b>Новый B2B-лид</b>\n\n"
+        f"Роль: {data.get('role')}\n"
+        f"Цель: {data.get('goal')}\n"
+        f"Ниша: {data.get('business_type')}\n"
+        f"Объем: {data.get('volume')}\n"
+        f"Интеграции: {data.get('integrations')}\n"
+        f"Бюджет: {data.get('budget')}\n"
+        f"Сроки: {data.get('deadline')}\n\n"
+        f"Комментарий:\n{data.get('comment')}\n\n"
+        f"👤 @{message.from_user.username} ({message.from_user.id})"
+    )
+
+    await bot.send_message(ADMIN_ID, lead_text)
+    await message.answer(
+        "Заявка получена.\n"
+        "Подготовлю предложение и свяжусь с вами в ближайшее время."
+    )
     await state.clear()
 
-@dp.callback_query(lambda c: c.data.startswith("q_"))
-async def question_sent(callback: CallbackQuery):
-    await callback.answer()
-    q_text = QUESTIONS_MAP.get(callback.data, callback.data)
-    await bot.send_message(
-        ADMIN_ID,
-        f"❓ Вопрос от @{callback.from_user.username} ({callback.from_user.id})\nТема: {q_text}",
-        reply_markup=admin_reply_question_kb(callback.from_user.id, callback.data)
-    )
-    await callback.message.answer("Вопрос отправлен 👌", reply_markup=main_menu)
-
+# ================= ADMIN REPLIES =================
 @dp.callback_query(lambda c: c.data.startswith("tpl_"))
 async def admin_template(callback: CallbackQuery):
     await callback.answer()
@@ -182,17 +247,6 @@ async def send_manual(message: Message, state: FSMContext):
     await bot.send_message(data["user_id"], message.text)
     await message.answer("Ответ отправлен ✅")
     await state.clear()
-
-@dp.callback_query(lambda c: c.data.startswith("answer_"))
-async def admin_reply_question(callback: CallbackQuery, state: FSMContext):
-    await callback.answer()
-    parts = callback.data.split("_", 2)
-    user_id = int(parts[1])
-    q_key = parts[2]
-    q_text = QUESTIONS_MAP.get(q_key, q_key)
-    await state.set_state(AdminReplyFSM.reply_text)
-    await state.update_data(user_id=user_id, question=q_text)
-    await callback.message.answer(f"Введите ответ на вопрос: «{q_text}»")
 
 # ================= RUN =================
 async def main():
