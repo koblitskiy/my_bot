@@ -158,9 +158,9 @@ async def choose_integrations(callback: CallbackQuery, state: FSMContext):
     await state.set_state(LeadFSM.budget)
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="До 30 000 ₽", callback_data="bud_30")],
-        [InlineKeyboardButton(text="30–80 000 ₽", callback_data="bud_80")],
-        [InlineKeyboardButton(text="80 000 ₽ +", callback_data="bud_80p")],
+        [InlineKeyboardButton(text="До 5 000 ₽", callback_data="bud_5")],
+        [InlineKeyboardButton(text="5–15 000 ₽", callback_data="bud_15")],
+        [InlineKeyboardButton(text="15 000 ₽ +", callback_data="bud_20p")],
         [InlineKeyboardButton(text="Нужна оценка", callback_data="bud_est")]
     ])
     await callback.message.answer(
